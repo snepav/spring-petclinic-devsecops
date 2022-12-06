@@ -1,0 +1,30 @@
+node {
+    def workspace = pwd()
+    
+    stage('Application_Build') {
+        checkout scm
+        sh 'mvn clean package -DskipTests'
+    }    
+    stage('Application_Dependency_Check') {
+        sh '/home/training/DevSecOps/dependency-check/bin/dependency-check.sh --project sppetclinic --scan ./'
+        dependencyCheckPublisher canComputeNew: false, defaultEncoding: '', healthy: '', pattern: '**/dependency-check-report.xml', unHealthy: ''
+    }
+    stage('Application_Unit_Test') {        
+        sh 'mvn compiler:testCompile surefire:test'
+        step([$class: 'JUnitResultArchiver', testResults: "**/surefire-reports/*.xml"])
+    }    
+    stage('Application_Code_Analysis') {        
+        withSonarQubeEnv {
+            sh 'mvn sonar:sonar -Dsonar.login=fd38c4bb5fd8fecff09ad067a13ca2f10f079c8c -Dsonar.projectKey=petclinickey -Dsonar.projectName=SimpleJavaProject -Dsonar.organization=petclinicorg'
+        }
+    }
+   
+    stage('Application_Deploy') {
+        sh "cp ${workspace}/target/petclinic.war ${TOMCAT_HOME}/webapps/"
+    }    
+    stage('Application_Dynamic_Security_Testing') {
+      sh '/home/training/DevSecOps/ZAP_2.10.0/zap.sh -cmd -quickurl http://localhost:8080/petclinic -quickprogress -quickout /home/training/DevSecOps/zapreport/reportout.xml'
+
+ 
+    }
+}
